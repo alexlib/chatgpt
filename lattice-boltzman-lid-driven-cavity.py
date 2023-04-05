@@ -28,15 +28,15 @@ def feq(rho,u):
 
 # Initialize the density, velocity, and distribution functions
 f = np.zeros((nx,ny,len(c)))
-rho = np.ones((nx,ny,1)) * rho0
+rho = np.ones((nx,ny)) * rho0
 u = np.zeros((nx,ny,2))
 
 # Set the boundary conditions
 u[-1,:,:] = u0   # top wall
 u[:,0,:] = 0.0   # bottom wall
 u[:,-1,:] = 0.0   # right wall
-rho[:,0,:] = rho0   # bottom wall
-rho[:,-1,:] = rho0   # right wall
+rho[:,0] = rho0   # bottom wall
+rho[:,-1] = rho0   # right wall
 
 # Main loop
 for it in range(maxit):
@@ -47,11 +47,14 @@ for it in range(maxit):
             f[i,j,:] = omega * feqval + (1.0 - omega) * f[i,j,:]
     
     # Streaming step
-    for i in range(1,nx):
-        for j in range(1,ny):
+    for i in range(nx):
+        for j in range(ny):
             for k in range(len(c)):
                 ip,jp = i + c[k,0], j + c[k,1]
-                f[i,j,k] = f[ip,jp,k]
+                # Check for boundary nodes
+                if ip < 0 or ip >= nx or jp < 0 or jp >= ny:
+                    continue
+                f[ip,jp,k] = f[i,j,k]
     
     # Update the density and velocity
     rho = np.sum(f,axis=2)
@@ -59,22 +62,33 @@ for it in range(maxit):
     u[:,:,1] = np.sum(f*c[:,1],axis=2) / rho
     
     # Apply the boundary conditions
-    u[-1,:,:] = u0   # top wall
-    rho[-1,:,:] = rho0
-    u[:,:,0] = 0.0   # walls
-    rho[:,:,0] = rho0
-    u[:,:,1] = 0.0
-    rho[:,:,1] = rho0
+    # Apply the boundary conditions
+    rho[0,:] = rho[1,:]   # left wall
+    u[0,:,:] = u0   # left wall
+    f[0,:,:] = feq(rho[0,:],u[0,:,:]) + f[1,:,:] - feq(rho[1,:],u[1,:,:])
     
-    # Check for convergence
+    rho[-1,:] = rho0   # top wall
+    f[-1,:,:] = feq(rho[-1,:],u[-1,:,:])
+    
+    rho[:,0,] = rho0   # bottom wall
+    f[:,0,:] = feq(rho[:,0],u[:,0,:])
+    
+    rho[:,-1] = rho[:,-2,:]   # right wall
+    u[:,-1,:] = u[:,-2,:]   # right wall
+    f[:,-1,:] = feq(rho[:,-1],u[:,-1,:]) + f[:,-2,:] - feq(rho[:,-2],u[:,-2,:])
+    
+    # Compute the velocity magnitude
+    vel = np.sqrt(u[:,:,0]**2 + u[:,:,1]**2)
+    
+    # Plot the velocity field
     if it % 100 == 0:
-        print('Iteration', it)
-        print('Residual', np.max(np.abs(np.sum(f,axis=2) - rho)))
-
-# Plot the results
-plt.imshow(u[:,:,0], cmap='jet', origin='lower', extent=[0,delta*nx,0,delta*ny])
+        plt.clf()
+        plt.imshow(vel.T,origin='lower')
+        plt.colorbar()
+        plt.pause(0.001)
+    
+# Plot the final velocity field
+plt.clf()
+plt.imshow(vel.T,origin='lower')
 plt.colorbar()
-plt.title('Velocity field')
-plt.xlabel('x')
-plt.ylabel('y')
 plt.show()
